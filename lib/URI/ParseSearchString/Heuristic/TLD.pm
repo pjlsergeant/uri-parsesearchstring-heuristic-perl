@@ -3,8 +3,6 @@ package URI::ParseSearchString::Heuristic::TLD;
 use strict;
 use warnings;
 
-use Net::Domain::TLD;
-
 # Some of these lists have been lifted from Net::Domain::TLD - which is
 # copyright "Copyright (c) 2003-2005 Alex Pavlovic"
 
