@@ -1,0 +1,11 @@
+- Lots and lots of corpus tests
+	- URLs from related modules
+	- Host parsing
+- Split out the config parts
+- Add a proper constructor
+- Rely on heuristics as little as possible
+	- Add other presets
+	- Add family presets
+- Document
+- Build tools
+- Cleanup
