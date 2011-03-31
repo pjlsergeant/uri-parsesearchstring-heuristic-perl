@@ -3,6 +3,7 @@ package URI::ParseSearchString::Heuristic;
 
 use strict;
 use warnings;
+use URI::Escape;
 use URI::ParseSearchString::Heuristic::TLD;
 use URI::ParseSearchString::Heuristic::URI;
 
@@ -44,10 +45,24 @@ sub parse {
     $data->{'url'} = $url;
 
     my $search = $self->parse_query( $data, $params, $param_string );
+    return unless $search;
+
     $data->{'search_terms'} = $search;
 
-    use Data::Dumper;
-    print Dumper $data;
+    # Google images hack...
+    if (
+        $data->{'engine_family'} &&
+        ($data->{'engine_family'} eq 'google') &&
+        (index($data->{'engine_key'}, 'images') > -1)
+    ) {
+        # Chop off '/images?q='
+        if ( $data->{'search_terms'} =~ s!^/images\?q=!! ) {
+            # Decode
+            $data->{'search_terms'} = uri_unescape($data->{'search_terms'});
+        }
+    }
+
+    return $data;
 }
 
 my %cache;
@@ -270,14 +285,16 @@ sub parse_host {
     }
 
     # Add specifics as relevant
-    while ( my $specifics = $more_specific{ $data->{'engine_family'} } ) {
-        last unless @atoms;
-        last unless grep { $atoms[0] eq $_ } @$specifics;
+    if ( $data->{'engine_family'} ) {
+        while ( my $specifics = $more_specific{ $data->{'engine_family'} } ) {
+            last unless @atoms;
+            last unless grep { $atoms[0] eq $_ } @$specifics;
 
-        my $name = $self->_transfer_atom( \@atoms, $data );
-        $data->{'engine_simple_name'} .= ' ' . $self->stylize_name( $name );
-        if ( $data->{'engine_full_name'} ) {
-            $data->{'engine_full_name'} .= ' ' . $self->stylize_name( $name );
+            my $name = $self->_transfer_atom( \@atoms, $data );
+            $data->{'engine_simple_name'} .= ' ' . $self->stylize_name( $name );
+            if ( $data->{'engine_full_name'} ) {
+                $data->{'engine_full_name'} .= ' ' . $self->stylize_name( $name );
+            }
         }
     }
 
