@@ -7,7 +7,7 @@ use warnings;
 # copyright "Copyright (c) 2003-2005 Alex Pavlovic"
 
 our %second_level = map { $_ => 1 }
-	qw( gov mil com net org );
+	qw( gov mil com net org host );
 
 our %international = map { $_ => 1 }
 	qw(info aero asia arpa biz cat coop jobs mobi museum name pro travel tel

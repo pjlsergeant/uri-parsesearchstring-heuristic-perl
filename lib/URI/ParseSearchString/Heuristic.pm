@@ -84,7 +84,8 @@ sub get_cached_engine {
 }
 
 # Keys known to give us problems...
-our %non_heuristic_keys = map { $_ => 1 } qw(next col btnG submit rfr WILDCARD METAENGINE);
+our %non_heuristic_keys = map { $_ => 1 }
+	qw(next col btnG submit rfr WILDCARD METAENGINE replayhash);
 my $preference_counter = 0;
 our %key_scores = map { $_ => ++$preference_counter } reverse (
         'query',              # CNET Search, Netscape
@@ -135,6 +136,12 @@ our %key_scores = map { $_ => ++$preference_counter } reverse (
 sub parse_query {
     my ( $self, $engine_data, $params, $param_string ) = @_;
     return unless keys %$params;
+
+	# Intercept Google's cache now...
+	if ( $params->{'q'} && !(index($params->{'q'},'cache:')) ) {
+		$engine_data->{'search_param_from'} = 'negative_hit_cache';
+		return;
+	}
 
     # If we know it, go with that
     if ( $engine_data->{'search_param'} ) {
@@ -217,7 +224,8 @@ sub parse_host {
 
             # Do a quick first-pass to see if it's worth continuing
             if ( grep {$_} map {
-                $URI::ParseSearchString::Heuristic::TLD::geographic{$_} }
+                $URI::ParseSearchString::Heuristic::TLD::geographic{$_} ||
+                $_ eq 'asia'}
                 @atoms
             ) {
                 # It is, so go through the atoms one by one until we find the
@@ -228,6 +236,10 @@ sub parse_host {
                         $self->_transfer_atom( \@atoms, $data );
                     last if $country =
                         $URI::ParseSearchString::Heuristic::TLD::geographic{$potential};
+                    if ( $potential eq 'asia' ) {
+                    	$country = 'Asia';
+                    	last;
+                    }
                 }
 
                 # Make the name geographic
@@ -298,6 +310,17 @@ sub parse_host {
         }
     }
 
+	# Irritating About.com hack - couldn't see how to do this more generically
+	if ( $data->{'engine_key'} eq 'com.about' ) {
+		$data->{'engine_family'} = 'about';
+		if ( my $name = $self->_transfer_atom( \@atoms, $data ) ) {
+			$data->{'engine_simple_name'} = 'About.com ' .
+				$self->stylize_name( $name );
+		} else {
+			$data->{'engine_simple_name'} = 'About.com';
+		}
+	}
+
     CLEANUP:
     # Fold in any presets
     %$data = (%$data, $self->engine_presets( $data->{'engine_key'} ));
@@ -320,11 +343,14 @@ sub is_stop_word {
     return !!$count;
 }
 
+our %simple_maps = (
+	'yahoo' => 'Yahoo!',
+	'blogseach' => 'Blog Search',
+);
 our %all_caps = map { $_ => 1 } qw( aol msn xl sapo );
 sub stylize_name {
     my ($self, $name) = @_;
-    return 'Yahoo!' if $name eq 'yahoo';
-    return 'Blog Search' if $name eq 'blogsearch';
+    return $simple_maps{ $name } if $simple_maps{ $name };
     return uc($name) if $all_caps{$name};
     return ucfirst( $name );
 }
@@ -332,6 +358,7 @@ sub stylize_name {
 our %presets = (
     'pt.record'         => { engine_simple_name => 'Jornal Record' },
     'com.rr'            => { engine_simple_name => 'Road Runner'   },
+    'net.att'           => { engine_simple_name => 'AT&T'   },
 );
 
 sub engine_presets {
