@@ -30,7 +30,7 @@ sub parse {
 	my $result = [
 		$uri_object->host,
 		[ reverse split(/\./, $uri_object->host) ],
-		$uri_object->path_query,
+		$uri_object->path,
 		$data,
 		$uri_object->query
 	];

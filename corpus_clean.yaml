@@ -1,3 +1,7 @@
+- full_name: Google
+  name: Google
+  terms: hämäläismurteet
+  url: https://encrypted.google.com/search?hl=en&safe=active&client=firefox-a&hs=EAc&rls=org.mozilla%3Aen-US%3Aofficial&q=h%C3%A4m%C3%A4l%C3%A4ismurteet&aq=f&aqi=&aql=&oq=
 - full_name: Google Finland
   name: Google
   terms: let's
@@ -431,19 +435,19 @@
   url: http://boards.thenest.com/boards/Search/SearchResults.aspx?q=MrsVioletBlue&f=&u=
 - full_name: Google Books India
   country: India
-  name: Google
+  name: Google Books
   terms: criteria
   url: http://books.google.co.in/books?q=criteria
 - full_name: Google Books Pakistan
-  name: Google
+  name: Google Books
   terms: site
   url: http://books.google.com.pk/books?q=site
 - full_name: Google Books
-  name: Google
+  name: Google Books
   terms: automobile
   url: http://books.google.com/books?q=automobile
 - full_name: Google Books France
-  name: Google
+  name: Google Books
   terms: Economy
   url: http://books.google.fr/books?q=Economy
 - full_name: Yahoo! Brazil
@@ -572,8 +576,8 @@
   name: Clusty
   terms: laura.harper
   url: http://clusty.com/search?query=laura.harper
-- full_name: CNET Search
-  name: CNET Search
+- full_name: Search.com
+  name: Search.com
   terms: night
   url: http://cnet.search.com/search?chkpt=astg.cnet.fd.search.cnet&q=night
 - full_name: Comcast
@@ -667,7 +671,7 @@
   terms: ''
   url: http://education.cornell.edu/people/faculty_bio.cfm?netid=jeh34&group=Extension%20&%20Outreach%20Staff
 - full_name: Yahoo! Education
-  name: Yahoo!
+  name: Yahoo! Education
   terms: Oysterpoint
   url: http://education.yahoo.com/reference/dictionary/search?p=Oysterpoint
 - full_name: 'Educatoin'
@@ -697,7 +701,7 @@
   terms: self
   url: http://eu.ixquick.com/do/metasearch.pl?cat=web&language=english&query=self
 - full_name: About.com Familycrafts
-  name: About.com
+  name: About.com Familycrafts
   terms: gifts grandma
   url: http://familycrafts.about.com/od/giftsforher/index.htm?terms=gifts+grandma
 - full_name: Copernic
@@ -791,8 +795,8 @@
   name: Yahoo!
   terms: CHEECO LODGE
   url: http://google.yahoo.com/bin/query?p=CHEECO+LODGE&hc=0&hs=0
-- full_name: Google (local)
-  name: Google (local)
+- full_name: Google (intranet)
+  name: Google (intranet)
   terms: triple
   url: http://google/search?q=triple
 - full_name: ''
@@ -800,6 +804,6 @@
   terms: ''
   url: http://gordana/Carstvo/tema2.asp?naslov=DAME
 - full_name: About.com Graphicssoft
-  name: About.com
+  name: About.com Graphicssoft
   terms: video
   url: http://graphicssoft.about.com/z/js/o.htm?k=video

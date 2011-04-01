@@ -25,6 +25,7 @@ for my $test (@$data) {
 	) {
 		my $expected = $test->{ $_->[1] } || '';
 		my $returned = $result->{ $_->[0] } || '';
+        utf8::encode($returned);
 
 		is( $returned, $expected, $_->[0] . ' match: ' . $expected ) || $fails++;
 	}

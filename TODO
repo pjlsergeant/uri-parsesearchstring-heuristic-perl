@@ -1,6 +1,5 @@
 - Lots and lots of corpus tests
-	- URLs from related modules
-	- Host parsing
+	- Finish remaining
 - Split out the config parts
 - Add a proper constructor
 - Rely on heuristics as little as possible
@@ -9,3 +8,5 @@
 - Document
 - Build tools
 - Cleanup
+- 'Fast'
+- Release

@@ -6,6 +6,7 @@ use warnings;
 use URI::Escape;
 use URI::ParseSearchString::Heuristic::TLD;
 use URI::ParseSearchString::Heuristic::URI;
+use Encode qw/decode/;
 
 # Search engine families
 our %families = map { $_ => 1 }
@@ -22,8 +23,9 @@ sub _transfer_atom {
 }
 
 our %more_specific = (
-    'google'  => ['blogsearch', 'images'],
+    'google'  => [qw( blogsearch images books )],
     'sapo'    => ['fotos', 'videos', 'sabores'],
+    'yahoo'   => [qw( education google )],
 );
 
 our $uri_parser = 'URI::ParseSearchString::Heuristic::URI';
@@ -38,13 +40,13 @@ sub parse {
     my $result = $uri_parser->parse( $url );
     return unless $result;
 
-    my ( $hostname, $atoms, $path_query, $params, $param_string ) = @$result;
+    my ( $hostname, $atoms, $path, $params, $param_string ) = @$result;
 
     # Pass the atoms in
     my $data = $self->parse_host( $atoms, $hostname );
     $data->{'url'} = $url;
 
-    my $search = $self->parse_query( $data, $params, $param_string );
+    my $search = $self->parse_query( $data, $params, $param_string, $path );
     return unless $search;
 
     $data->{'search_terms'} = $search;
@@ -60,6 +62,15 @@ sub parse {
             # Decode
             $data->{'search_terms'} = uri_unescape($data->{'search_terms'});
         }
+    }
+
+    # Encoding fun!
+    if ( $data->{'search_terms_encoding'} ) {
+        $data->{'search_terms'} =
+            decode( $data->{'search_terms_encoding'}, $data->{'search_terms'} );
+    } else {
+        $data->{'search_terms'} =
+            decode( 'utf8', $data->{'search_terms'} );
     }
 
     return $data;
@@ -85,25 +96,26 @@ sub get_cached_engine {
 
 # Keys known to give us problems...
 our %non_heuristic_keys = map { $_ => 1 }
-	qw(next col btnG submit rfr WILDCARD METAENGINE replayhash);
+    qw(next col btnG submit rfr WILDCARD METAENGINE replayhash group pageName
+    alias );
 my $preference_counter = 0;
 our %key_scores = map { $_ => ++$preference_counter } reverse (
         'query',              # CNET Search, Netscape
-        'search',
+        'search', 'Search',
         'term', 'terms',      # abcsearch.com
         'ask',                # Ask Jeeves
         'palabras',
         'DTqb1',
         'request',
         'ShowMatch',          # syndic8
-        'keyword', 'keywords', # Snap, overture.com
+        'keyword', 'keywords', 'Keywords', # Snap, overture.com, Earthnet
         'general',            # MetaCrawler, Go2Net
         'key',                # Looksmart
         'MetaTopic',          # AJ
         'query0',             # elf8888.at, thx to http://www.tnl.net/
         'queryString',        # blogdigger.com
         'serachfor',          # mysearch.com dyslexia ;)
-        'word',               # baidu.com
+        'word','wd',          # baidu.com
         'rn',
         'mt',                 # MSN, HotBot
         'qt',                 # Go, Infoseek, search.com
@@ -133,20 +145,28 @@ our %key_scores = map { $_ => ++$preference_counter } reverse (
         'kp'                  # Fact bites
     );
 
+our @forbidden_strings = ( 'ikonboard.cgi', 'ultimatebb.cgi' );
+
 sub parse_query {
-    my ( $self, $engine_data, $params, $param_string ) = @_;
+    my ( $self, $engine_data, $params, $param_string, $path ) = @_;
     return unless keys %$params;
 
-	# Intercept Google's cache now...
-	if ( $params->{'q'} && !(index($params->{'q'},'cache:')) ) {
-		$engine_data->{'search_param_from'} = 'negative_hit_cache';
-		return;
-	}
+    # Intercept Google's cache now...
+    if ( $params->{'q'} && !(index($params->{'q'},'cache:')) ) {
+        $engine_data->{'search_param_from'} = 'negative_hit_cache';
+        return;
+    }
 
     # If we know it, go with that
     if ( $engine_data->{'search_param'} ) {
         $engine_data->{'search_param_from'} = 'preset';
         return $params->{ $engine_data->{'search_param'} };
+    }
+
+    # Knock out forbidden URLs
+    if ( grep { index( $path, $_ ) > 0 } @forbidden_strings ) {
+        $engine_data->{'search_param_from'} = 'negative_hit_forbidden';
+        return;
     }
 
     # Flatten the parameters and sort by preference
@@ -167,7 +187,7 @@ sub parse_query {
     }
 
     # That didn't work. Do we match any keys?
-    my ( $result ) = grep { $_->[2] } @param_array;
+    my ( $result ) = grep { $_->[2] && $_->[1] } @param_array;
     if ( $result ) {
         $engine_data->{'search_param'}      = $result->[0];
         $engine_data->{'search_param_from'} = 'heuristic_param';
@@ -237,8 +257,8 @@ sub parse_host {
                     last if $country =
                         $URI::ParseSearchString::Heuristic::TLD::geographic{$potential};
                     if ( $potential eq 'asia' ) {
-                    	$country = 'Asia';
-                    	last;
+                        $country = 'Asia';
+                        last;
                     }
                 }
 
@@ -289,10 +309,11 @@ sub parse_host {
         if ( $tld eq 'local' ) {
             if ( @atoms ) {
                 my $name = $self->_transfer_atom( \@atoms, $data );
-                $data->{'engine_simple_name'} = $self->stylize_name( $name );
+                $data->{'engine_simple_name'} = $self->stylize_name( $name ) .
+                    ' (intranet)';
             }
         } else {
-            $data->{'engine_simple_name'} = $tld;
+            $data->{'engine_simple_name'} = $self->stylize_name($tld) . ' (intranet)';
         }
     }
 
@@ -304,22 +325,25 @@ sub parse_host {
 
             my $name = $self->_transfer_atom( \@atoms, $data );
             $data->{'engine_simple_name'} .= ' ' . $self->stylize_name( $name );
-            if ( $data->{'engine_full_name'} ) {
-                $data->{'engine_full_name'} .= ' ' . $self->stylize_name( $name );
+
+            # If we had a geographic part, that should probably go on the end...
+            if ( my $country = $data->{'engine_country'} ) {
+                my $sname = $self->stylize_name( $name );
+                $data->{'engine_full_name'} =~ s/ ($country)$/ $sname $1/;
             }
         }
     }
 
-	# Irritating About.com hack - couldn't see how to do this more generically
-	if ( $data->{'engine_key'} eq 'com.about' ) {
-		$data->{'engine_family'} = 'about';
-		if ( my $name = $self->_transfer_atom( \@atoms, $data ) ) {
-			$data->{'engine_simple_name'} = 'About.com ' .
-				$self->stylize_name( $name );
-		} else {
-			$data->{'engine_simple_name'} = 'About.com';
-		}
-	}
+    # Irritating About.com hack - couldn't see how to do this more generically
+    if ( $data->{'engine_key'} eq 'com.about' ) {
+        $data->{'engine_family'} = 'about';
+        if ( my $name = $self->_transfer_atom( \@atoms, $data ) ) {
+            $data->{'engine_simple_name'} = 'About.com ' .
+                $self->stylize_name( $name );
+        } else {
+            $data->{'engine_simple_name'} = 'About.com';
+        }
+    }
 
     CLEANUP:
     # Fold in any presets
@@ -344,10 +368,10 @@ sub is_stop_word {
 }
 
 our %simple_maps = (
-	'yahoo' => 'Yahoo!',
-	'blogseach' => 'Blog Search',
+    'yahoo' => 'Yahoo!',
+    'blogseach' => 'Blog Search',
 );
-our %all_caps = map { $_ => 1 } qw( aol msn xl sapo );
+our %all_caps = map { $_ => 1 } qw( aol msn xl sapo icq );
 sub stylize_name {
     my ($self, $name) = @_;
     return $simple_maps{ $name } if $simple_maps{ $name };
@@ -358,7 +382,12 @@ sub stylize_name {
 our %presets = (
     'pt.record'         => { engine_simple_name => 'Jornal Record' },
     'com.rr'            => { engine_simple_name => 'Road Runner'   },
-    'net.att'           => { engine_simple_name => 'AT&T'   },
+    'net.att'           => { engine_simple_name => 'AT&T'          },
+    'com.search'        => { engine_simple_name => 'Search.com'    },
+    'net.earthlink-help'=> { engine_simple_name => 'myEarthLink'   },
+    'com.yahoo.google'  => { engine_simple_name => 'Yahoo!', engine_full_name => 'Yahoo! (via Google)' },
+
+    'com.baidu'         => { search_terms_encoding => 'euc-cn'     },
 );
 
 sub engine_presets {
