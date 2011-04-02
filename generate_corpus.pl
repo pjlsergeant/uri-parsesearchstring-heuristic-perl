@@ -46,11 +46,13 @@ while (my $line = <STDIN>) {
 	};
 
 	my $hresult = URI::ParseSearchString::Heuristic->parse( $line );
-	$output->{'guess'}->{'heuristic'} = {};
 	if ( $hresult ) {
 		$output->{'terms'} = $hresult->{'search_terms'} || '';
 		$output->{'name'} = $hresult->{'engine_simple_name'} || '';
 		$output->{'full_name'} = $hresult->{'engine_full_name'} || '';
+		if ( $hresult->{'search_terms_location'} ) {
+			$output->{'location'} = $hresult->{'search_terms_location'};
+		}
 	}
 
 	push( @cases, $output );

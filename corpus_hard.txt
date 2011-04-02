@@ -1,0 +1,2 @@
+http://www.google.co.uk/search?hl=en&ie=UTF-8&q=perl&tbm=blg # Google Blog Search UK
+http://www.google.fr/#hl=fr&source=hp&biw=1024&bih=642&q=perl&aq=f&aqi=g7g-s1g2&aql=&oq=&fp=c01d26ad9d20f02d

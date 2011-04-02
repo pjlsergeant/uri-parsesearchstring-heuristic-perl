@@ -4,13 +4,42 @@ package URI::ParseSearchString::Heuristic;
 use strict;
 use warnings;
 use URI::Escape;
-use URI::ParseSearchString::Heuristic::TLD;
 use URI::ParseSearchString::Heuristic::URI;
+use URI::ParseSearchString::Heuristic::TLD;
 use Encode qw/decode/;
 
-# Search engine families
-our %families = map { $_ => 1 }
-    qw( google yahoo lycos aol excite msn altavista ask sapo );
+=head1 NAME
+
+URI::ParseSearchString::Heuristic - Parse search engine URLs
+
+=head1 DESCRIPTION
+
+Parse search engine URLs
+
+=head1 SYNOPSIS
+
+ use URI::ParseSearchString::Heuristic;
+
+ my $parser = URI::ParseSearchString::Heuristic->new();
+
+ my $result = $parser->parse('http://www.google.co.uk/search?q=perl&tbm=blg');
+
+=cut
+
+sub new {
+	my ( $class, %params ) = @_;
+	%params = (
+		config_package => 'URI::ParseSearchString::Heuristic::Configuration',
+		uri_parser     => 'URI::ParseSearchString::Heuristic::URI',
+		%params
+	);
+	my $self = bless \%params, $class;
+
+	eval "require " . $params{'config_package'};
+	$params{'c'} = { $params{'config_package'}->export_vars() };
+
+	return $self;
+}
 
 sub _transfer_atom {
     my ( $self, $from, $to ) = @_;
@@ -22,14 +51,6 @@ sub _transfer_atom {
     return $item;
 }
 
-our %more_specific = (
-    'google'  => [qw( blogsearch images books )],
-    'sapo'    => ['fotos', 'videos', 'sabores'],
-    'yahoo'   => [qw( education google )],
-);
-
-our $uri_parser = 'URI::ParseSearchString::Heuristic::URI';
-
 sub parse {
     my ( $self, $url ) = @_;
 
@@ -37,32 +58,24 @@ sub parse {
     return if index( $url, 'http' );  # Return unless the string starts with http
 
     # Parse the URL in to parts
-    my $result = $uri_parser->parse( $url );
+    my $result = $self->{'uri_parser'}->parse( $url );
     return unless $result;
 
     my ( $hostname, $atoms, $path, $params, $param_string ) = @$result;
 
     # Pass the atoms in
-    my $data = $self->parse_host( $atoms, $hostname );
+    my $data = $self->parse_host( $atoms, $hostname, $params );
     $data->{'url'} = $url;
 
     my $search = $self->parse_query( $data, $params, $param_string, $path );
     return unless $search;
 
-    $data->{'search_terms'} = $search;
+	# Do any special transforms
+	if ( $data->{'search_transform'} ) {
+		$search = $data->{'search_transform'}->( $data, $search );
+	}
 
-    # Google images hack...
-    if (
-        $data->{'engine_family'} &&
-        ($data->{'engine_family'} eq 'google') &&
-        (index($data->{'engine_key'}, 'images') > -1)
-    ) {
-        # Chop off '/images?q='
-        if ( $data->{'search_terms'} =~ s!^/images\?q=!! ) {
-            # Decode
-            $data->{'search_terms'} = uri_unescape($data->{'search_terms'});
-        }
-    }
+    $data->{'search_terms'} = $search;
 
     # Encoding fun!
     if ( $data->{'search_terms_encoding'} ) {
@@ -94,59 +107,6 @@ sub get_cached_engine {
     }
 }
 
-# Keys known to give us problems...
-our %non_heuristic_keys = map { $_ => 1 }
-    qw(next col btnG submit rfr WILDCARD METAENGINE replayhash group pageName
-    alias );
-my $preference_counter = 0;
-our %key_scores = map { $_ => ++$preference_counter } reverse (
-        'query',              # CNET Search, Netscape
-        'search', 'Search',
-        'term', 'terms',      # abcsearch.com
-        'ask',                # Ask Jeeves
-        'palabras',
-        'DTqb1',
-        'request',
-        'ShowMatch',          # syndic8
-        'keyword', 'keywords', 'Keywords', # Snap, overture.com, Earthnet
-        'general',            # MetaCrawler, Go2Net
-        'key',                # Looksmart
-        'MetaTopic',          # AJ
-        'query0',             # elf8888.at, thx to http://www.tnl.net/
-        'queryString',        # blogdigger.com
-        'serachfor',          # mysearch.com dyslexia ;)
-        'word','wd',          # baidu.com
-        'rn',
-        'mt',                 # MSN, HotBot
-        'qt',                 # Go, Infoseek, search.com
-        'oq',
-        'dom',                # Domainsurfer
-        'q',                  # Altavista, Google, Dogpile, Evreka, Metafind
-        's',                  # Excite, blogsphere.us
-        'p',                  # Yahoo
-        't',
-        'qry',
-        'qkw',                # dpxml, msxml
-        'qr',                 # northernlight.com
-        'qu',
-        'kw',                 # Sapo
-        'general',
-        'B1',
-        'sc',                 # Gohip
-        'szukaj',
-        'PA',
-        'MT',                 # goo.ne.jp
-        'req',                # dir.com
-        'k',                  # galaxy.com
-        'cat',                # Dmoz
-        'va',                 # search.yahoo.com
-        'K',                  # srd.yahoo.com
-        'as_epq',             # Google, sometimes. Advanced query maybe?
-        'kp'                  # Fact bites
-    );
-
-our @forbidden_strings = ( 'ikonboard.cgi', 'ultimatebb.cgi' );
-
 sub parse_query {
     my ( $self, $engine_data, $params, $param_string, $path ) = @_;
     return unless keys %$params;
@@ -157,14 +117,40 @@ sub parse_query {
         return;
     }
 
+	# Google local - how exciting!
+	if (
+		defined($engine_data->{'engine_family_key'}) &&
+		$engine_data->{'engine_family_key'} eq 'google.local'
+	) {
+		$engine_data->{'search_param_from'} = 'google_local_match';
+		$engine_data->{'search_param'} = 'q';
+		$engine_data->{'search_terms_location'} = $params->{'near'};
+		return $params->{'q'};
+	}
+
     # If we know it, go with that
     if ( $engine_data->{'search_param'} ) {
         $engine_data->{'search_param_from'} = 'preset';
         return $params->{ $engine_data->{'search_param'} };
     }
 
+	# Intercept Firstlook, who domain-squat
+	if (
+		(delete $engine_data->{'engine_might_be_firstlook'}) ||
+		($params->{'qs'} && $params->{'aid'} && $params->{'Keywords'} ) ) {
+		my $terms = $params->{'Keywords'} || $params->{'s'};
+		if ( $terms ) {
+			$engine_data->{'search_param_from'}  = 'recognized_firstlook';
+			$engine_data->{'engine_simple_name'} = 'Firstlook Domains';
+			$engine_data->{'engine_full_name'}   = 'Firstlook Domains';
+			$engine_data->{'search_param'} = $params->{'Keywords'} ?
+				'Keywords' : 's';
+			return $terms;
+		}
+	}
+
     # Knock out forbidden URLs
-    if ( grep { index( $path, $_ ) > 0 } @forbidden_strings ) {
+    if ( grep { index( $path, $_ ) > 0 } @{ $self->{'c'}->{'forbidden_strings'} } ) {
         $engine_data->{'search_param_from'} = 'negative_hit_forbidden';
         return;
     }
@@ -172,8 +158,8 @@ sub parse_query {
     # Flatten the parameters and sort by preference
     my @param_array =
         sort { $b->[2] <=> $a->[2] }
-        map  { [ $_ => $params->{$_}, ($key_scores{$_}||0) ] }
-        grep {! $non_heuristic_keys{$_} }
+        map  { [ $_ => $params->{$_}, ($self->{'c'}->{'key_scores'}->{$_}||0) ] }
+        grep {! $self->{'c'}->{'non_heuristic_keys'}->{$_} }
         keys %$params;
     return unless @param_array;
 
@@ -181,6 +167,7 @@ sub parse_query {
     if ( index( $param_string, '+' ) > 0 || index( $param_string, '%20' ) > 0 ) {
         my ( $result ) = grep { $_->[1] =~ m/ /} @param_array;
         if ( $result ) {
+	        $engine_data->{'search_param'}      = $result->[0];
             $engine_data->{'search_param_from'} = 'heuristic_space';
             return $result->[1];
         }
@@ -199,7 +186,7 @@ sub parse_query {
 
 # Turns a series of hostname atoms an identifier and related data
 sub parse_host {
-    my ( $self, $atoms_incoming, $full_host ) = @_;
+    my ( $self, $atoms_incoming, $full_host, $params ) = @_;
     $full_host ||= join '.', reverse @$atoms_incoming;
 
     # Use the cached version if we have one
@@ -208,6 +195,11 @@ sub parse_host {
 
     # This is where we'll build the search-engine data
     my $data = {};
+
+	# Set a flag if it might be FirstLook
+	if ( $atoms_incoming->[-1] eq 'hit' ) {
+		$data->{'engine_might_be_firstlook'} = 1;
+	}
 
     # Special-handle IP addresses
     unless ( $full_host =~ m/[a-z]/ ) {
@@ -239,8 +231,9 @@ sub parse_host {
 
         # Add a country if it's a big international and we can find it in the
         # atoms. First let's just check it's an international...
-        if ( $families{ $name } ) {
+        if ( $self->{'c'}->{'families'}->{ $name } ) {
             $data->{'engine_family'} = $name;
+            $data->{'engine_family_key'} = $name;
 
             # Do a quick first-pass to see if it's worth continuing
             if ( grep {$_} map {
@@ -298,9 +291,10 @@ sub parse_host {
 
         my $name = $self->_transfer_atom( \@atoms, $data );
         $data->{'engine_simple_name'} = $self->stylize_name( $name );
-        if ( $families{ $name } ) {
+        if ( $self->{'c'}->{'families'}->{ $name } ) {
             $data->{'engine_full_name'} = $self->stylize_name( $name ) . ' ' . $country;
             $data->{'engine_family'} = $name;
+            $data->{'engine_family_key'} = $name;
         }
 
     # Local domains!
@@ -319,19 +313,23 @@ sub parse_host {
 
     # Add specifics as relevant
     if ( $data->{'engine_family'} ) {
-        while ( my $specifics = $more_specific{ $data->{'engine_family'} } ) {
-            last unless @atoms;
-            last unless grep { $atoms[0] eq $_ } @$specifics;
 
-            my $name = $self->_transfer_atom( \@atoms, $data );
-            $data->{'engine_simple_name'} .= ' ' . $self->stylize_name( $name );
+			while ( my $specifics =
+				$self->{'c'}->{'family_specifics'}->{ $data->{'engine_family'} } ) {
+				last unless @atoms;
+				last unless grep { $atoms[0] eq $_ } @$specifics;
 
-            # If we had a geographic part, that should probably go on the end...
-            if ( my $country = $data->{'engine_country'} ) {
-                my $sname = $self->stylize_name( $name );
-                $data->{'engine_full_name'} =~ s/ ($country)$/ $sname $1/;
-            }
-        }
+				$data->{'engine_family_key'} .= '.' . $atoms[0];
+
+				my $name = $self->_transfer_atom( \@atoms, $data );
+				$data->{'engine_simple_name'} .= ' ' . $self->stylize_name( $name );
+
+				# If we had a geographic part, that should probably go on the end...
+				if ( my $country = $data->{'engine_country'} ) {
+					my $sname = $self->stylize_name( $name );
+					$data->{'engine_full_name'} =~ s/ ($country)$/ $sname $1/;
+				}
+			}
     }
 
     # Irritating About.com hack - couldn't see how to do this more generically
@@ -347,7 +345,7 @@ sub parse_host {
 
     CLEANUP:
     # Fold in any presets
-    %$data = (%$data, $self->engine_presets( $data->{'engine_key'} ));
+    %$data = (%$data, $self->engine_presets( $data ));
 
     # Default the full name to the simple one if it hasn't been set yet
     $data->{'engine_full_name'} ||= $data->{'engine_simple_name'};
@@ -356,43 +354,31 @@ sub parse_host {
     return $data;
 }
 
-our @stop_words = (
-    qr/^www\d*$/o,
-    qr/^search$/o,
-    qr/^busca(dor|r)?%/o,
-);
 sub is_stop_word {
     my ( $self, $atom ) = @_;
-    my $count = grep { $atom =~ $_ } @stop_words;
+    my $count = grep { $atom =~ $_ } @{ $self->{'c'}->{'stop_words'} };
     return !!$count;
 }
 
-our %simple_maps = (
-    'yahoo' => 'Yahoo!',
-    'blogseach' => 'Blog Search',
-);
-our %all_caps = map { $_ => 1 } qw( aol msn xl sapo icq );
 sub stylize_name {
     my ($self, $name) = @_;
-    return $simple_maps{ $name } if $simple_maps{ $name };
-    return uc($name) if $all_caps{$name};
+    return $self->{'c'}->{'simple_maps'}->{ $name } if $self->{'c'}->{'simple_maps'}->{ $name };
+    return uc($name) if $self->{'c'}->{'all_caps'}->{ $name };
     return ucfirst( $name );
 }
 
-our %presets = (
-    'pt.record'         => { engine_simple_name => 'Jornal Record' },
-    'com.rr'            => { engine_simple_name => 'Road Runner'   },
-    'net.att'           => { engine_simple_name => 'AT&T'          },
-    'com.search'        => { engine_simple_name => 'Search.com'    },
-    'net.earthlink-help'=> { engine_simple_name => 'myEarthLink'   },
-    'com.yahoo.google'  => { engine_simple_name => 'Yahoo!', engine_full_name => 'Yahoo! (via Google)' },
-
-    'com.baidu'         => { search_terms_encoding => 'euc-cn'     },
-);
-
 sub engine_presets {
-    my ( $self, $key ) = @_;
-    return $presets{$key} ? ( %{ $presets{ $key } } ) : ();
+    my ( $self, $data ) = @_;
+    if ( $self->{'c'}->{'key_presets'}->{ $data->{'engine_key'} } ) {
+    	return %{$self->{'c'}->{'key_presets'}->{ $data->{'engine_key'} }};
+    } elsif (
+    	$data->{'engine_family_key'} &&
+    	$self->{'c'}->{'family_presets'}->{ $data->{'engine_family_key'} }
+    ) {
+    	return %{ $self->{'c'}->{'family_presets'}->{ $data->{'engine_family_key'} } };
+    } else {
+    	return ();
+    }
 }
 
 1;

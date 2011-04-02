@@ -1,0 +1,72 @@
+
+
+=head1 PARSING OVERVIEW
+
+=head2 Two types of search engine
+
+We're going to start with the concept of I<Search Engine Families> (SEF). Google
+is an I<international> SEF, where SAPO is a local SEF (Portuguese, as it
+happens). SEF's have different sections which return different results - perhaps
+an image search and a blog search. International SEF's also show differing
+regional results - Google UK returns different results from Google Canada.
+
+In contrast, we also have I<Stand-Alone Search Engines> (SASE). There used to be
+B<lots> of these, but consolidation within the industry has meant that many are
+now just a front for a SEF's underlying engine.
+
+=head2 What we return
+
+As you'll see a little further down, we only provide one interesting method,
+which is C<parse>. C<parse> returns a hashref if it was able to match search
+terms, otherwise it returns C<undef>.
+
+From a successful match, you will always get at least C<search_terms>,
+C<engine_name>, and C<engine_expanded_name> returned. If you were parsing a URL
+from a SASE, then C<engine_expanded_name> will just be a copy of C<engine_name>.
+
+If you were parsing a URL from a SEF, you might also get back a C<engine_type>,
+which is the type of search performed. For a normal search, this won't be set,
+but if we've detected an image or blog search, we'll set this. You can see a
+list of possibilities in the documentation below.
+
+If you were parsing a URL from an international SEF, then we might have set
+C<engine_locality>. The C<engine_locality> field is a country-code, from which
+you can derive a name. This won't ever be set from a SASE.
+
+C<engine_locality>
+which is the geographical subsite that was searched. If the URL came from an
+image or blog search
+
+=cut
+
+engine_name
+engine_type
+engine_locality
+engine_expanded_name
+
+search_terms
+search_geographic
+search_start
+
+meta_encoding
+meta_family
+meta_key
+
+
+
+
+
+Pull out the hostname
+If it's a family:
+	Save the locality
+	Look for specifics
+		In the host
+
+Is it a search?
+If so:
+	Mark out the type if we can
+	Pull out the search terms as well we can
+	Pull out any geographics
+	Pull out any 'start' info we happen to have
+
+Fix encoding as relevant, and suck in any overrides

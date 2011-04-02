@@ -1,7 +1,5 @@
 - Lots and lots of corpus tests
 	- Finish remaining
-- Split out the config parts
-- Add a proper constructor
 - Rely on heuristics as little as possible
 	- Add other presets
 	- Add family presets
