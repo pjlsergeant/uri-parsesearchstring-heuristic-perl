@@ -41,15 +41,7 @@ sub new {
 	return $self;
 }
 
-sub _transfer_atom {
-    my ( $self, $from, $to ) = @_;
-    return unless @$from;
 
-    my $item = shift(@$from);
-    $to->{'engine_key'} =
-        $to->{'engine_key'} ? $to->{'engine_key'} . '.' . $item : $item;
-    return $item;
-}
 
 sub parse {
     my ( $self, $url ) = @_;

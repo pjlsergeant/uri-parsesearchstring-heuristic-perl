@@ -3,11 +3,8 @@
 use strict;
 use warnings;
 use Test::More;
-use Data::Dumper;
 use URI::ParseSearchString::Heuristic;
-use URI::ParseSearchString::Heuristic::URI;
-
-my $parser = URI::ParseSearchString::Heuristic->new();
+use Data::Dumper;
 
 for my $test (
 	['google.com', {
@@ -69,7 +66,7 @@ for my $test (
 		engine_full_name   => 'Jornal Record',
 		engine_key         => 'pt.record',
 	}],
-	['blogsearch.google.co.uk', {
+	['blogsearch.google.com', {
 		engine_simple_name => 'Google Blog Search',
 		engine_full_name   => 'Google Blog Search',
 		engine_key         => 'com.google.blogsearch',
@@ -81,12 +78,11 @@ for my $test (
 	}],
 ) {
 	my ($host, $details) = @$test;
-	my $data = { meta_url_full => "http://$host/?q=foo" };
-
-	URI::ParseSearchString::Heuristic::URI->parse( $data );
-
-	my $result = $parser->_parse_host( $data );
-	note Dumper $data;
+	my @atoms = reverse split(/\./, $host);
+	my $result = URI::ParseSearchString::Heuristic->parse_host( \@atoms );
+	note $host;
+	note Dumper $result;
+	is_deeply( $result, $details, $host );
 }
 
 done_testing;
